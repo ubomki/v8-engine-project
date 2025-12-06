@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$LATE - The Lazy Voxel</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    
+    <!-- Google Fonts: 'Press Start 2P' for that 8-bit NES vibe -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'pixel': ['"Press Start 2P"', 'cursive'],
+                    },
+                    colors: {
+                        'pump-green': '#14F195', /* Pump.fun Green */
+                        'pump-bg': '#1B1D28',
+                        'late-red': '#FF4444',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <style>
+        body { margin: 0; background-color: #101010; overflow: hidden; user-select: none; }
+        
+        /* CRT Scanline Effect Overlay */
+        .scanlines {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10;
+        }
+        
+        /* Floating Animation for UI */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+    </style>
+</head>
+<body class="text-white font-pixel antialiased">
+
+    <!-- CRT Overlay -->
+    <div class="scanlines"></div>
+
+    <!-- UI Layer -->
+    <div class="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-4 md:p-8">
+        
+        <!-- Top Bar -->
+        <div class="flex justify-between items-start pointer-events-auto">
+            <div class="bg-black/80 border-2 border-pump-green p-4 shadow-[4px_4px_0px_0px_rgba(20,241,149,1)]">
+                <h1 class="text-pump-green text-xl md:text-2xl mb-2">$LATE</h1>
+                <p class="text-xs text-gray-400">STATUS: OVERSLEPT</p>
+                <p class="text-xs text-late-red mt-1">MARKET CAP: ???</p>
+            </div>
+            
+            <a href="https://pump.fun" target="_blank" class="bg-pump-green text-black border-2 border-white px-4 py-3 hover:scale-105 transition-transform shadow-[4px_4px_0px_0px_#FFF] text-xs md:text-sm">
+                BUY ON PUMP.FUN
+            </a>
+        </div>
+
+        <!-- Center Message (Hidden initially, shows on click) -->
+        <div id="panic-msg" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center opacity-0 transition-opacity duration-100">
+            <h2 class="text-4xl text-late-red drop-shadow-[4px_4px_0px_#000]">WAIT FOR ME!</h2>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="text-center mb-8 animate-float">
+            <p class="text-[10px] md:text-xs text-gray-500 mb-2 uppercase tracking-widest">Interactive 3D Experience</p>
+            <button id="boost-btn" class="pointer-events-auto bg-late-red text-white border-2 border-white px-8 py-4 shadow-[6px_6px_0px_0px_#FFF] active:translate-y-1 active:shadow-none hover:bg-red-500 transition-all text-sm md:text-lg">
+                CLICK TO RUSH
+            </button>
+            <p class="mt-4 text-[10px] text-gray-600">CA: (Loading... still sleeping)</p>
+        </div>
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container" class="fixed inset-0 z-0"></div>
+
+    <!-- THREE.JS LOGIC -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { RenderPixelatedPass } from 'three/addons/postprocessing/RenderPixelatedPass.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // 1. SETUP
+        const container = document.getElementById('canvas-container');
+        const screenRes = { width: window.innerWidth, height: window.innerHeight };
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1B1D28); // Dark Blue-Grey (Code editor vibe)
+        scene.fog = new THREE.Fog(0x1B1D28, 10, 50);
+
+        // Orthographic Camera gives that perfect Isometric RPG look
+        const aspect = window.innerWidth / window.innerHeight;
+        const d = 20;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+        camera.position.set(20, 20, 20); // Isometric angle
+        camera.lookAt(scene.position);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(1); // Keep 1 for pixel shader to work best
+        container.appendChild(renderer.domElement);
+
+        // 2. POST PROCESSING (The Pixel Look)
+        const composer = new EffectComposer(renderer);
+        // Resolution: 4 means "pixels are 4x4 blocks". Higher = blockier.
+        const renderPixelatedPass = new RenderPixelatedPass(4, scene, camera);
+        renderPixelatedPass.normalEdgeStrength = 0.5; // Outline edges
+        renderPixelatedPass.depthEdgeStrength = 0.5;
+        composer.addPass(renderPixelatedPass);
+
+        // Bloom for the "Pump" Candles
+        const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+        bloomPass.threshold = 0.6;
+        bloomPass.strength = 0.8;
+        bloomPass.radius = 0.1;
+        composer.addPass(bloomPass);
+
+        // 3. VOXEL BUILDER HELPER
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+        function createVoxel(color, x, y, z, parent) {
+            const mat = new THREE.MeshStandardMaterial({ 
+                color: color, 
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const mesh = new THREE.Mesh(boxGeo, mat);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            parent.add(mesh);
+            return mesh;
+        }
+
+        // 4. CHARACTERS & OBJECTS
+
+        // A. The Player (Sleeping Guy on Bed)
+        const playerGroup = new THREE.Group();
+        scene.add(playerGroup);
+
+        // Bed Frame
+        createVoxel(0x8B4513, 0, 0, 0, playerGroup); // Center
+        createVoxel(0x8B4513, 0, 0, 1, playerGroup); 
+        createVoxel(0x8B4513, 0, 0, -1, playerGroup);
+        // Mattress
+        createVoxel(0xFFFFFF, 0, 0.8, 0, playerGroup);
+        createVoxel(0xFFFFFF, 0, 0.8, 1, playerGroup);
+        createVoxel(0xFFFFFF, 0, 0.8, -1, playerGroup);
+        // The Guy (Blue PJs)
+        createVoxel(0x3B82F6, 0, 1.5, 0, playerGroup); // Body
+        createVoxel(0xFCA5A5, 0, 1.5, 1, playerGroup); // Head (Skin tone)
+        // Zzz Particles
+        const zzzGroup = new THREE.Group();
+        playerGroup.add(zzzGroup);
+
+        // B. The Environment (Moving Candles)
+        const worldGroup = new THREE.Group();
+        scene.add(worldGroup);
+
+        const candles = [];
+        
+        function spawnCandle(zPos) {
+            const height = Math.floor(Math.random() * 5) + 2;
+            const isGreen = Math.random() > 0.3; // Mostly green (bullish)
+            const color = isGreen ? 0x14F195 : 0xFF4444;
+            const xPos = (Math.random() - 0.5) * 20;
+            
+            const candleGroup = new THREE.Group();
+            candleGroup.position.set(xPos, height/2 - 5, zPos); // Start low
+            
+            for(let i=0; i<height; i++) {
+                createVoxel(color, 0, i, 0, candleGroup);
+            }
+            
+            // The wick
+            const wick = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, height + 2, 0.2), 
+                new THREE.MeshBasicMaterial({color: 0xffffff})
+            );
+            candleGroup.add(wick);
+
+            worldGroup.add(candleGroup);
+            candles.push({ mesh: candleGroup, speed: Math.random() * 0.2 + 0.1 });
+        }
+
+        // Initial Spawn
+        for(let i=0; i<30; i++) {
+            spawnCandle(-i * 5);
+        }
+
+        // 5. LIGHTING
+        const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // 6. ANIMATION & INTERACTION
+        let speed = 0.5;
+        let time = 0;
+        let isRushing = false;
+        const boostBtn = document.getElementById('boost-btn');
+        const panicMsg = document.getElementById('panic-msg');
+
+        // Interaction
+        function triggerRush() {
+            isRushing = true;
+            speed = 2.0;
+            camera.zoom = 1.2;
+            camera.updateProjectionMatrix();
+            panicMsg.style.opacity = '1';
+            
+            // Reset after 1s
+            setTimeout(() => {
+                isRushing = false;
+                speed = 0.5;
+                camera.zoom = 1.0;
+                camera.updateProjectionMatrix();
+                panicMsg.style.opacity = '0';
+            }, 800);
+        }
+
+        boostBtn.addEventListener('mousedown', triggerRush);
+        boostBtn.addEventListener('touchstart', triggerRush);
+        window.addEventListener('mousedown', () => { 
+            // Also trigger on generic click if they miss the button
+            if(!isRushing) triggerRush(); 
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.1;
+
+            // Animate Player (Bobbing)
+            playerGroup.position.y = Math.sin(time) * 0.5;
+            // Rotate player slightly if rushing
+            playerGroup.rotation.z = isRushing ? 0.2 : 0;
+            playerGroup.rotation.x = isRushing ? -0.2 : 0;
+
+            // Animate "Zzz"
+            if (Math.floor(time) % 10 === 0) {
+                // Logic to spawn Z particles could go here
+            }
+
+            // Move World (Endless Runner Logic)
+            candles.forEach((c, index) => {
+                c.mesh.position.z += speed;
+                
+                // Reset if passes camera
+                if(c.mesh.position.z > 20) {
+                    c.mesh.position.z = -100;
+                    c.mesh.position.x = (Math.random() - 0.5) * 30;
+                }
+            });
+
+            composer.render();
+        }
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            const aspect = window.innerWidth / window.innerHeight;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
