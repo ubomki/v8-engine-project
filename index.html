@@ -4,25 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D V8 Engine Simulation</title>
-    
-    <!-- Tailwind CSS (As requested) -->
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
-    
-    <!-- Tailwind Configuration for Custom Colors/Fonts -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        'engine-dark': '#0f0f11',
-                        'engine-accent': '#ffaa00',
-                    }
+                    colors: { 'engine-dark': '#0f0f11', 'engine-accent': '#ffaa00' }
                 }
             }
         }
     </script>
-    
-    <!-- Three.js Import Map -->
     <script type="importmap">
         {
             "imports": {
@@ -31,64 +22,59 @@
             }
         }
     </script>
-
     <style>
         body { margin: 0; overflow: hidden; background-color: #050505; }
         canvas { display: block; }
-        /* Custom slider styling to match the tweet */
-        input[type=range] {
-            -webkit-appearance: none; 
-            background: transparent; 
-        }
+        input[type=range] { -webkit-appearance: none; background: transparent; }
         input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 20px;
-            width: 20px;
-            border-radius: 50%;
-            background: #ffffff;
-            border: 2px solid #333;
-            margin-top: -8px; 
-            cursor: pointer;
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: #ffffff; border: 2px solid #333; margin-top: -8px; cursor: pointer;
         }
         input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            background: #ffaa00;
-            border-radius: 2px;
+            width: 100%; height: 4px; cursor: pointer; background: #ffaa00; border-radius: 2px;
         }
     </style>
 </head>
 <body class="text-white font-mono antialiased">
 
     <!-- UI Overlay -->
-    <div class="absolute top-0 left-0 w-full h-full pointer-events-none">
+    <div class="absolute top-0 left-0 w-full h-full pointer-events-none z-10">
         
-        <!-- Top Left Info Panel -->
-        <div class="absolute top-8 left-8 bg-black/80 border border-gray-700 p-6 rounded-lg backdrop-blur-sm max-w-xs pointer-events-auto">
+        <!-- NEW: Fullscreen Button (Visible by default) -->
+        <button id="btn-enter-fs" class="pointer-events-auto absolute top-4 right-4 bg-gray-800/80 border border-gray-600 text-white p-2 rounded-lg hover:bg-gray-700 transition-colors backdrop-blur-md z-50">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+            </svg>
+        </button>
+
+        <!-- NEW: Exit Button (Hidden by default) -->
+        <button id="btn-exit-fs" class="hidden pointer-events-auto absolute top-4 right-4 bg-red-600/80 border border-red-400 text-white p-2 rounded-full hover:bg-red-500 transition-colors backdrop-blur-md z-50">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        
+        <!-- Top Left Info Panel (Added ID 'info-panel') -->
+        <div id="info-panel" class="absolute top-8 left-8 bg-black/80 border border-gray-700 p-6 rounded-lg backdrop-blur-sm max-w-xs pointer-events-auto transition-opacity duration-300">
             <h2 class="text-engine-accent font-bold text-xl mb-4 tracking-wider">V8 ENGINE LOGIC</h2>
-            
             <div class="space-y-2 text-xs text-gray-400 mb-6">
                 <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-blue-500 mr-2"></span> Intake</div>
                 <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span> Compression</div>
                 <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-red-600 mr-2"></span> Power (Ignition)</div>
                 <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-gray-500 mr-2"></span> Exhaust</div>
             </div>
-
             <div class="text-xs text-gray-500 space-y-1">
                 <p>Configuration:</p>
                 <p class="text-gray-300">90° V8 Cross-plane</p>
                 <p class="text-engine-accent">Integral Counterweights</p>
-                <p>Max RPM: 8000</p>
+                <p class="text-engine-accent">Mobile Optimized</p>
             </div>
         </div>
 
         <!-- Bottom Controls -->
-        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-black/80 border border-gray-700 px-8 py-4 rounded-full flex items-center gap-6 pointer-events-auto backdrop-blur-md">
-            <span class="text-xs text-gray-400 font-bold tracking-widest uppercase">Throttle</span>
-            
-            <input type="range" id="throttle" min="0" max="8000" value="1000" class="w-64">
-            
+        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-black/80 border border-gray-700 px-8 py-4 rounded-full flex items-center gap-6 pointer-events-auto backdrop-blur-md w-[90%] md:w-auto justify-center">
+            <span class="text-xs text-gray-400 font-bold tracking-widest uppercase hidden md:block">Throttle</span>
+            <input type="range" id="throttle" min="0" max="8000" value="1000" class="w-full md:w-64">
             <span id="rpm-display" class="text-engine-accent font-bold font-mono w-12 text-right">1000</span>
         </div>
     </div>
@@ -96,12 +82,54 @@
     <!-- WebGL Container -->
     <div id="canvas-container" class="w-full h-screen"></div>
 
-    <!-- Application Logic -->
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- 1. Scene Setup ---
+        // --- NEW: FULLSCREEN LOGIC ---
+        const btnEnter = document.getElementById('btn-enter-fs');
+        const btnExit = document.getElementById('btn-exit-fs');
+        const infoPanel = document.getElementById('info-panel');
+
+        function toggleUI(isFullscreen) {
+            if (isFullscreen) {
+                infoPanel.classList.add('hidden'); // Hide Table
+                btnEnter.classList.add('hidden');  // Hide Enter Button
+                btnExit.classList.remove('hidden'); // Show Exit Button
+            } else {
+                infoPanel.classList.remove('hidden'); // Show Table
+                btnEnter.classList.remove('hidden');
+                btnExit.classList.add('hidden');
+            }
+        }
+
+        btnEnter.addEventListener('click', () => {
+            document.documentElement.requestFullscreen().catch((e) => {
+                console.log("Fullscreen not supported or blocked", e);
+                // Even if browser denies fullscreen (some iPhones), we still hide the UI
+                toggleUI(true);
+            });
+        });
+
+        btnExit.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                // If we faked fullscreen (mobile safari), just toggle UI back
+                toggleUI(false);
+            }
+        });
+
+        // Listen for system changes (e.g. user presses ESC key)
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                toggleUI(false);
+            } else {
+                toggleUI(true);
+            }
+        });
+
+        // --- THREE.JS SETUP (Standard V8 Engine) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x050505);
         scene.fog = new THREE.FogExp2(0x050505, 0.02);
@@ -119,177 +147,84 @@
         controls.autoRotate = true;
         controls.autoRotateSpeed = 0.5;
 
-        // --- 2. Lighting ---
         const ambientLight = new THREE.AmbientLight(0x404040, 2);
         scene.add(ambientLight);
-
         const dirLight = new THREE.DirectionalLight(0xffffff, 3);
         dirLight.position.set(5, 10, 7);
         scene.add(dirLight);
+        scene.add(new THREE.PointLight(0x0044ff, 5, 20).translateX(-5).translateY(2));
+        scene.add(new THREE.PointLight(0xff0000, 5, 20).translateX(5).translateY(2));
 
-        const blueLight = new THREE.PointLight(0x0044ff, 5, 20);
-        blueLight.position.set(-5, 2, 0);
-        scene.add(blueLight);
-
-        const redLight = new THREE.PointLight(0xff0000, 5, 20);
-        redLight.position.set(5, 2, 0);
-        scene.add(redLight);
-
-        // --- 3. Engine Construction ---
         const engineGroup = new THREE.Group();
         scene.add(engineGroup);
 
-        // Materials
-        const metalMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x888888, 
-            metalness: 0.9, 
-            roughness: 0.2 
-        });
-        const pistonMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xcccccc, 
-            metalness: 0.8, 
-            roughness: 0.3 
-        });
-        const rodMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x555555, 
-            metalness: 0.6, 
-            roughness: 0.5 
-        });
-
-        // Crankshaft (Simplified)
+        const metalMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.2 });
+        const pistonMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.3 });
+        
+        // Crankshaft
         const crankShaft = new THREE.Group();
-        const mainShaftGeo = new THREE.CylinderGeometry(0.3, 0.3, 10, 16);
-        const mainShaft = new THREE.Mesh(mainShaftGeo, metalMaterial);
+        const mainShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 10, 16), metalMat);
         mainShaft.rotation.z = Math.PI / 2;
         crankShaft.add(mainShaft);
-        
-        // Add a flywheel visual
-        const flywheelGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.2, 32);
-        const flywheel = new THREE.Mesh(flywheelGeo, new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 }));
-        flywheel.rotation.z = Math.PI / 2;
-        flywheel.position.x = -5;
-        crankShaft.add(flywheel);
-        
         engineGroup.add(crankShaft);
 
-        // Piston System Generator
         const pistons = [];
-        const pistonCount = 8;
-        const bankAngle = Math.PI / 4; // 45 degrees
+        for (let i = 0; i < 8; i++) {
+            const isRight = i % 2 === 0;
+            const dir = isRight ? 1 : -1;
+            const xPos = (i * 1.0) - 3.5;
+            
+            const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 2.5, 16), 
+                new THREE.MeshStandardMaterial({ color: 0xffffff, opacity: 0.1, transparent: true, side: 2 }));
+            cyl.rotation.x = dir * (Math.PI / 4);
+            cyl.rotation.z = Math.PI / 2;
+            
+            const head = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.8, 16), pistonMat);
+            head.rotation.z = Math.PI / 2;
+            
+            const group = new THREE.Group();
+            group.position.x = xPos;
+            group.rotation.x = dir * (Math.PI / 4);
+            group.add(cyl);
+            group.add(head);
+            engineGroup.add(group);
 
-        for (let i = 0; i < pistonCount; i++) {
-            const isRightBank = i % 2 === 0;
-            const bankDir = isRightBank ? 1 : -1;
-            const xPos = (i * 1.0) - 3.5; // Spread along shaft
-            
-            // Create Cylinder (Bore) - Transparent visual
-            const cylinderGeo = new THREE.CylinderGeometry(0.6, 0.6, 2.5, 16);
-            const cylinderMat = new THREE.MeshStandardMaterial({ 
-                color: 0xffffff, 
-                opacity: 0.1, 
-                transparent: true, 
-                side: THREE.DoubleSide 
-            });
-            const cylinderBlock = new THREE.Mesh(cylinderGeo, cylinderMat);
-            
-            // Position Cylinder block in V shape
-            cylinderBlock.rotation.x = bankDir * bankAngle; // Tilt 45 deg
-            cylinderBlock.rotation.z = Math.PI / 2; // Lay flat relative to Z
-            
-            // We need to group the piston parts to animate them easily relative to the bank angle
-            const pistonGroup = new THREE.Group();
-            pistonGroup.position.x = xPos;
-            
-            // Create Piston Head
-            const headGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.8, 16);
-            const head = new THREE.Mesh(headGeo, pistonMaterial);
-            head.rotation.z = Math.PI / 2; // Orient correctly
-            
-            // Connecting Rod
-            const rodGeo = new THREE.BoxGeometry(2, 0.1, 0.1);
-            const rod = new THREE.Mesh(rodGeo, rodMaterial);
-            
-            // Add to scene hierarchy
-            // We rotate the whole group to match the V8 bank angle
-            const assemblyWrapper = new THREE.Group();
-            assemblyWrapper.position.x = xPos;
-            assemblyWrapper.rotation.x = bankDir * bankAngle;
-            
-            assemblyWrapper.add(cylinderBlock); // Visual guide
-            assemblyWrapper.add(head); // The moving part
-            
-            engineGroup.add(assemblyWrapper);
-
-            // Store reference for animation
-            // Offset logic for firing order (Cross-plane vibe)
-            const offset = (i % 4) * (Math.PI / 2) + (isRightBank ? 0 : Math.PI);
-
-            pistons.push({
-                head: head,
-                wrapper: assemblyWrapper,
-                offset: offset,
-                bankDir: bankDir
-            });
+            pistons.push({ head: head, offset: (i % 4) * (Math.PI / 2) + (isRight ? 0 : Math.PI) });
         }
 
-        // --- 4. Logic & Animation ---
         let rpm = 1000;
         let time = 0;
         
-        // UI Controls
-        const slider = document.getElementById('throttle');
-        const rpmDisplay = document.getElementById('rpm-display');
-
-        slider.addEventListener('input', (e) => {
+        document.getElementById('throttle').addEventListener('input', (e) => {
             rpm = parseInt(e.target.value);
-            rpmDisplay.innerText = rpm;
-            // Visual feedback: Camera speed increases with RPM
+            document.getElementById('rpm-display').innerText = rpm;
             controls.autoRotateSpeed = 0.5 + (rpm / 4000); 
         });
 
         function animate() {
             requestAnimationFrame(animate);
-
-            // Calculate speed based on RPM
-            // 6000 RPM = 100 revs per second
-            const speed = (rpm / 60 * 2 * Math.PI) / 60; // Scaling for frame rate roughly
-            
-            time += speed * 0.5; // Adjust simulation speed factor
-
-            // Rotate Crankshaft
+            const speed = (rpm / 60 * 2 * Math.PI) / 60;
+            time += speed * 0.5;
             crankShaft.rotation.x = time;
-
-            // Animate Pistons
             pistons.forEach(p => {
-                // Simple Sin wave to simulate piston up/down motion
-                // The Math.sin matches the crankshaft rotation + specific piston offset
-                const positionY = Math.sin(time + p.offset) * 0.8;
-                
-                // Move piston head up and down locally within its rotated group
-                p.head.position.y = positionY;
-                
-                // Color change based on cycle (simulating ignition)
-                if (positionY > 0.7) {
-                    // Top Dead Center (roughly) - Flash Red
+                const y = Math.sin(time + p.offset) * 0.8;
+                p.head.position.y = y;
+                if (y > 0.7) {
                     p.head.material.emissive.setHex(0xff0000);
                     p.head.material.emissiveIntensity = 0.5;
                 } else {
-                    p.head.material.emissive.setHex(0x000000);
                     p.head.material.emissiveIntensity = 0;
                 }
             });
-
             controls.update();
             renderer.render(scene, camera);
         }
 
-        // Handle Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
         animate();
     </script>
 </body>
